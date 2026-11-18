@@ -1,0 +1,761 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CodeSync — Real-Time Collaborative Editor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,300;0,400;0,500;0,600;1,400&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/dracula.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/javascript/javascript.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/python/python.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/htmlmixed/htmlmixed.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/xml/xml.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/css/css.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/sql/sql.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/markdown/markdown.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/matchbrackets.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/closebrackets.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/selection/active-line.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/comment/comment.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.6.1/socket.io.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg-base:#090c14;--bg-surface:#0f1420;--bg-panel:#131926;--bg-card:#1a2133;
+  --bg-hover:#1f2840;--bg-active:#243050;
+  --accent:#60a5fa;--accent2:#34d399;--accent3:#f472b6;
+  --border:#1e2d4a;--border2:#243356;
+  --text:#e2e8f0;--text2:#94a3b8;--text3:#475569;
+  --red:#f87171;--green:#4ade80;--yellow:#fbbf24;--orange:#fb923c;
+  --font-ui:'Syne',sans-serif;--font-code:'JetBrains Mono',monospace;
+  --radius:8px;--radius-lg:12px;--radius-xl:16px;
+  --transition:0.18s ease;
+}
+html,body{height:100%;overflow:hidden;background:var(--bg-base);color:var(--text);font-family:var(--font-ui)}
+
+/* ── LANDING ─────────────────────────────────────────────────────────── */
+#landing{
+  position:fixed;inset:0;background:var(--bg-base);z-index:100;
+  display:flex;align-items:center;justify-content:center;
+  background-image:radial-gradient(ellipse 60% 50% at 50% -10%,rgba(96,165,250,0.12) 0%,transparent 70%),
+    radial-gradient(ellipse 40% 40% at 80% 80%,rgba(52,211,153,0.07) 0%,transparent 60%);
+}
+.landing-inner{width:100%;max-width:960px;padding:2rem;display:grid;grid-template-columns:1fr 1fr;gap:3rem;align-items:center}
+.landing-left{}
+.landing-badge{display:inline-flex;align-items:center;gap:6px;background:rgba(96,165,250,0.1);border:1px solid rgba(96,165,250,0.2);border-radius:99px;padding:4px 12px;font-size:12px;color:var(--accent);letter-spacing:.06em;text-transform:uppercase;font-weight:600;margin-bottom:1.5rem}
+.landing-badge::before{content:'';width:6px;height:6px;background:var(--accent);border-radius:50%;animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.landing-title{font-size:clamp(2.5rem,5vw,3.8rem);font-weight:800;line-height:1.08;letter-spacing:-.03em;margin-bottom:1rem}
+.landing-title span{background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.landing-sub{color:var(--text2);font-size:1.05rem;line-height:1.6;margin-bottom:2.5rem;font-family:var(--font-code);font-size:.9rem}
+.landing-right{background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--radius-xl);padding:2rem;display:flex;flex-direction:column;gap:1.5rem}
+.landing-tabs{display:flex;gap:2px;background:var(--bg-base);border-radius:var(--radius);padding:3px}
+.ltab{flex:1;padding:8px;text-align:center;border-radius:6px;cursor:pointer;font-size:.8rem;font-weight:600;color:var(--text3);transition:var(--transition);letter-spacing:.04em;text-transform:uppercase}
+.ltab.active{background:var(--bg-card);color:var(--text)}
+.landing-form{display:flex;flex-direction:column;gap:1rem}
+.form-group{display:flex;flex-direction:column;gap:.4rem}
+.form-group label{font-size:.78rem;font-weight:600;color:var(--text3);letter-spacing:.06em;text-transform:uppercase}
+.form-group input,.form-group select{background:var(--bg-base);border:1px solid var(--border);border-radius:var(--radius);padding:10px 14px;color:var(--text);font-size:.9rem;font-family:var(--font-ui);outline:none;transition:var(--transition)}
+.form-group input:focus,.form-group select:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(96,165,250,.12)}
+.form-group select option{background:var(--bg-card)}
+.btn-primary{background:var(--accent);color:#fff;border:none;border-radius:var(--radius);padding:11px 20px;font-family:var(--font-ui);font-weight:700;font-size:.95rem;cursor:pointer;transition:var(--transition);letter-spacing:.02em}
+.btn-primary:hover{background:#3b82f6;transform:translateY(-1px)}
+.btn-primary:active{transform:translateY(0)}
+.divider{text-align:center;color:var(--text3);font-size:.8rem;letter-spacing:.08em;text-transform:uppercase;position:relative}
+.divider::before,.divider::after{content:'';position:absolute;top:50%;width:40%;height:1px;background:var(--border)}
+.divider::before{left:0}.divider::after{right:0}
+.room-join{display:flex;gap:.5rem}
+.room-join input{flex:1;background:var(--bg-base);border:1px solid var(--border);border-radius:var(--radius);padding:10px 14px;color:var(--text);font-size:.9rem;font-family:var(--font-code);outline:none;letter-spacing:.1em;transition:var(--transition)}
+.room-join input:focus{border-color:var(--accent)}
+.room-join button{background:var(--bg-card);border:1px solid var(--border2);border-radius:var(--radius);padding:10px 16px;color:var(--text);cursor:pointer;font-family:var(--font-ui);font-weight:600;font-size:.85rem;transition:var(--transition);white-space:nowrap}
+.room-join button:hover{background:var(--bg-hover);border-color:var(--accent)}
+.rooms-list{display:flex;flex-direction:column;gap:.5rem;max-height:220px;overflow-y:auto}
+.room-item{background:var(--bg-base);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;cursor:pointer;transition:var(--transition);display:flex;align-items:center;justify-content:space-between}
+.room-item:hover{border-color:var(--accent);background:var(--bg-card)}
+.room-item-name{font-weight:600;font-size:.9rem;margin-bottom:2px}
+.room-item-meta{font-size:.76rem;color:var(--text3);font-family:var(--font-code)}
+.room-item-badge{background:rgba(96,165,250,.15);border:1px solid rgba(96,165,250,.2);color:var(--accent);font-size:.72rem;padding:3px 8px;border-radius:99px;font-weight:600}
+.rooms-empty{text-align:center;color:var(--text3);font-size:.85rem;padding:1.5rem;font-family:var(--font-code)}
+
+/* ── MAIN EDITOR ─────────────────────────────────────────────────────── */
+#app{height:100vh;display:flex;flex-direction:column;display:none}
+.topbar{height:52px;background:var(--bg-surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 1rem;gap:.75rem;flex-shrink:0}
+.brand{font-weight:800;font-size:1.05rem;letter-spacing:-.02em;white-space:nowrap}
+.brand span{color:var(--accent)}
+.room-info{display:flex;align-items:center;gap:.5rem;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:5px 10px;cursor:pointer;transition:var(--transition)}
+.room-info:hover{border-color:var(--accent)}
+.room-dot{width:7px;height:7px;background:var(--green);border-radius:50%;animation:pulse 2s infinite}
+.room-id-text{font-family:var(--font-code);font-size:.8rem;font-weight:600;letter-spacing:.08em}
+.room-name-text{font-size:.78rem;color:var(--text2)}
+.topbar-mid{flex:1;display:flex;align-items:center;justify-content:center;gap:.75rem}
+.lang-select{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:5px 10px;color:var(--text);font-family:var(--font-ui);font-size:.82rem;font-weight:600;outline:none;cursor:pointer;transition:var(--transition)}
+.lang-select:hover,.lang-select:focus{border-color:var(--accent)}
+.topbar-right{display:flex;align-items:center;gap:.5rem}
+.tb-btn{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:6px 12px;color:var(--text2);cursor:pointer;font-size:.8rem;font-weight:600;font-family:var(--font-ui);transition:var(--transition);display:flex;align-items:center;gap:5px;white-space:nowrap}
+.tb-btn:hover{background:var(--bg-hover);color:var(--text);border-color:var(--border2)}
+.tb-btn.green:hover{background:rgba(74,222,128,.12);color:var(--green);border-color:rgba(74,222,128,.3)}
+.tb-btn.red:hover{background:rgba(248,113,113,.12);color:var(--red);border-color:rgba(248,113,113,.3)}
+.conn-badge{display:flex;align-items:center;gap:5px;font-size:.78rem;font-weight:600;padding:5px 10px;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);color:var(--text2)}
+.conn-dot{width:6px;height:6px;border-radius:50%;background:var(--yellow)}
+.conn-dot.connected{background:var(--green)}
+
+.main-area{flex:1;display:flex;overflow:hidden}
+.sidebar-left{width:220px;background:var(--bg-surface);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;transition:width var(--transition)}
+.sidebar-left.collapsed{width:0;overflow:hidden}
+.sidebar-section{padding:.75rem;border-bottom:1px solid var(--border)}
+.sidebar-label{font-size:.7rem;font-weight:700;color:var(--text3);letter-spacing:.1em;text-transform:uppercase;margin-bottom:.5rem;display:flex;align-items:center;justify-content:space-between}
+.user-list{display:flex;flex-direction:column;gap:.4rem}
+.user-item{display:flex;align-items:center;gap:.6rem;padding:5px 6px;border-radius:6px;transition:var(--transition)}
+.user-item:hover{background:var(--bg-hover)}
+.user-avatar{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.7rem;font-weight:700;flex-shrink:0;color:#fff}
+.user-name{font-size:.82rem;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.user-you{font-size:.65rem;color:var(--text3);font-family:var(--font-code)}
+.file-tree{display:flex;flex-direction:column;gap:2px}
+.file-item{display:flex;align-items:center;gap:.5rem;padding:6px 8px;border-radius:6px;cursor:pointer;font-size:.82rem;color:var(--text2);transition:var(--transition)}
+.file-item:hover{background:var(--bg-hover);color:var(--text)}
+.file-item.active{background:var(--bg-active);color:var(--accent)}
+.file-icon{width:14px;flex-shrink:0;opacity:.6}
+.stats-grid{display:grid;grid-template-columns:1fr 1fr;gap:.4rem}
+.stat-card{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:.5rem .6rem;text-align:center}
+.stat-val{font-size:1.1rem;font-weight:700;font-family:var(--font-code);color:var(--accent)}
+.stat-lbl{font-size:.62rem;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-top:1px}
+
+.editor-area{flex:1;display:flex;flex-direction:column;overflow:hidden;position:relative}
+.editor-tabs{height:36px;background:var(--bg-surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 .75rem;gap:.25rem;overflow-x:auto;flex-shrink:0}
+.editor-tab{display:flex;align-items:center;gap:.4rem;padding:5px 12px;border-radius:6px 6px 0 0;font-size:.8rem;font-weight:600;cursor:pointer;color:var(--text3);white-space:nowrap;transition:var(--transition);border:1px solid transparent;border-bottom:none;position:relative}
+.editor-tab.active{background:var(--bg-base);color:var(--text);border-color:var(--border);margin-bottom:-1px;padding-bottom:6px}
+.tab-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.editor-wrap{flex:1;overflow:hidden;position:relative}
+.CodeMirror{height:100%!important;background:#090c14!important;font-family:var(--font-code)!important;font-size:13.5px!important;line-height:1.7!important}
+.CodeMirror-scroll{overflow-y:auto!important}
+.CodeMirror-gutters{background:#090c14!important;border-right:1px solid var(--border)!important}
+.CodeMirror-linenumber{color:#2d3f5e!important;font-family:var(--font-code)!important;font-size:12px!important}
+.CodeMirror-cursor{border-left:2px solid var(--accent)!important}
+
+/* remote cursors */
+.remote-cursor{position:relative;border-left:2px solid;pointer-events:none;margin-left:-1px}
+.remote-cursor-label{position:absolute;top:-20px;left:0;font-size:10px;font-family:var(--font-code);font-weight:600;white-space:nowrap;padding:1px 5px;border-radius:3px;pointer-events:none;color:#fff;z-index:10}
+
+.editor-statusbar{height:26px;background:var(--bg-surface);border-top:1px solid var(--border);display:flex;align-items:center;padding:0 1rem;gap:1.5rem;flex-shrink:0}
+.sb-item{font-size:.72rem;color:var(--text3);font-family:var(--font-code);display:flex;align-items:center;gap:4px}
+.sb-item span{color:var(--text2)}
+
+.sidebar-right{width:0;background:var(--bg-surface);border-left:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;transition:width var(--transition);flex-shrink:0}
+.sidebar-right.open{width:280px}
+.chat-header{padding:.75rem 1rem;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.chat-title{font-weight:700;font-size:.9rem}
+.chat-close{background:none;border:none;color:var(--text3);cursor:pointer;font-size:1.1rem;padding:2px;border-radius:4px;transition:var(--transition)}
+.chat-close:hover{color:var(--text);background:var(--bg-hover)}
+.chat-messages{flex:1;overflow-y:auto;padding:.75rem;display:flex;flex-direction:column;gap:.6rem}
+.chat-msg{max-width:100%}
+.chat-msg-header{display:flex;align-items:center;gap:.4rem;margin-bottom:2px}
+.chat-msg-name{font-size:.73rem;font-weight:700}
+.chat-msg-time{font-size:.68rem;color:var(--text3);font-family:var(--font-code)}
+.chat-msg-body{background:var(--bg-card);border:1px solid var(--border);border-radius:0 var(--radius) var(--radius) var(--radius);padding:6px 10px;font-size:.83rem;line-height:1.45;color:var(--text);word-break:break-word}
+.chat-msg.self .chat-msg-body{border-radius:var(--radius) 0 var(--radius) var(--radius);background:rgba(96,165,250,.1);border-color:rgba(96,165,250,.2)}
+.chat-sys{text-align:center;font-size:.73rem;color:var(--text3);font-family:var(--font-code);padding:2px 0}
+.chat-input-area{padding:.6rem .75rem;border-top:1px solid var(--border);display:flex;gap:.4rem}
+.chat-input{flex:1;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:7px 10px;color:var(--text);font-size:.83rem;font-family:var(--font-ui);outline:none;transition:var(--transition)}
+.chat-input:focus{border-color:var(--accent)}
+.chat-send{background:var(--accent);border:none;border-radius:var(--radius);padding:7px 11px;color:#fff;cursor:pointer;font-size:.9rem;transition:var(--transition)}
+.chat-send:hover{background:#3b82f6}
+
+/* ── MODALS ──────────────────────────────────────────────────────────── */
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:200;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px);opacity:0;pointer-events:none;transition:opacity .2s}
+.modal-bg.open{opacity:1;pointer-events:all}
+.modal{background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--radius-xl);padding:1.5rem;min-width:340px;max-width:480px;width:100%;transform:translateY(10px);transition:transform .2s}
+.modal-bg.open .modal{transform:translateY(0)}
+.modal-title{font-weight:800;font-size:1.1rem;margin-bottom:1rem;display:flex;align-items:center;justify-content:space-between}
+.modal-close{background:none;border:none;color:var(--text3);cursor:pointer;font-size:1.2rem;padding:2px}
+.modal-close:hover{color:var(--text)}
+.share-box{background:var(--bg-base);border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px;font-family:var(--font-code);font-size:.85rem;word-break:break-all;color:var(--accent);margin-bottom:1rem}
+.copy-btn{width:100%;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:10px;color:var(--text);cursor:pointer;font-family:var(--font-ui);font-weight:600;font-size:.85rem;transition:var(--transition)}
+.copy-btn:hover{background:var(--bg-hover);border-color:var(--accent)}
+.copy-btn.copied{color:var(--green);border-color:rgba(74,222,128,.3);background:rgba(74,222,128,.08)}
+
+/* ── TOAST ───────────────────────────────────────────────────────────── */
+#toast-container{position:fixed;bottom:1.5rem;right:1.5rem;z-index:999;display:flex;flex-direction:column;gap:.5rem;pointer-events:none}
+.toast{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:10px 16px;font-size:.83rem;font-weight:600;color:var(--text);min-width:200px;animation:slideIn .2s ease;box-shadow:0 8px 32px rgba(0,0,0,.4)}
+.toast.success{border-left:3px solid var(--green)}
+.toast.info{border-left:3px solid var(--accent)}
+.toast.warn{border-left:3px solid var(--yellow)}
+@keyframes slideIn{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:translateX(0)}}
+
+/* ── SCROLLBARS ──────────────────────────────────────────────────────── */
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:99px}
+::-webkit-scrollbar-thumb:hover{background:#2d4a7a}
+
+/* ── RESPONSIVE ──────────────────────────────────────────────────────── */
+@media(max-width:768px){
+  .landing-inner{grid-template-columns:1fr}
+  .landing-left{display:none}
+  .sidebar-left{display:none}
+  .sidebar-right.open{width:100%;position:fixed;inset:0;top:52px;z-index:50}
+}
+</style>
+</head>
+<body>
+
+<!-- ── LANDING PAGE ─────────────────────────────────────────────────────── -->
+<div id="landing">
+  <div class="landing-inner">
+    <div class="landing-left">
+      <div class="landing-badge">Live Collaboration</div>
+      <h1 class="landing-title">Code<br>Together,<br><span>Ship Faster</span></h1>
+      <p class="landing-sub">Real-time collaborative code editor with<br>multi-cursor sync, live chat &amp; syntax highlighting<br>for 8+ languages. No account needed.</p>
+      <div style="display:flex;gap:.75rem;flex-wrap:wrap">
+        <div style="display:flex;align-items:center;gap:.4rem;font-size:.78rem;color:var(--text3)"><span style="color:var(--green);font-size:.6rem">●</span> Sub-100ms latency</div>
+        <div style="display:flex;align-items:center;gap:.4rem;font-size:.78rem;color:var(--text3)"><span style="color:var(--accent);font-size:.6rem">●</span> No sign-up</div>
+        <div style="display:flex;align-items:center;gap:.4rem;font-size:.78rem;color:var(--text3)"><span style="color:var(--accent3);font-size:.6rem">●</span> 8 languages</div>
+      </div>
+    </div>
+    <div class="landing-right">
+      <div class="landing-tabs">
+        <div class="ltab active" id="tab-create" onclick="switchTab('create')">Create Room</div>
+        <div class="ltab" id="tab-join" onclick="switchTab('join')">Join Room</div>
+        <div class="ltab" id="tab-browse" onclick="switchTab('browse')">Browse</div>
+      </div>
+
+      <!-- Create -->
+      <div id="pane-create" class="landing-form">
+        <div class="form-group">
+          <label>Your Name</label>
+          <input id="create-name" placeholder="e.g. Alice" maxlength="20">
+        </div>
+        <div class="form-group">
+          <label>Room Name</label>
+          <input id="create-room-name" placeholder="e.g. Backend Sprint">
+        </div>
+        <div class="form-group">
+          <label>Language</label>
+          <select id="create-lang">
+            <option value="javascript">JavaScript</option>
+            <option value="typescript">TypeScript</option>
+            <option value="python">Python</option>
+            <option value="html">HTML</option>
+            <option value="css">CSS</option>
+            <option value="sql">SQL</option>
+            <option value="json">JSON</option>
+            <option value="markdown">Markdown</option>
+          </select>
+        </div>
+        <button class="btn-primary" onclick="createRoom()">Create &amp; Enter Room →</button>
+      </div>
+
+      <!-- Join -->
+      <div id="pane-join" class="landing-form" style="display:none">
+        <div class="form-group">
+          <label>Your Name</label>
+          <input id="join-name" placeholder="e.g. Bob" maxlength="20">
+        </div>
+        <div class="form-group">
+          <label>Room Code</label>
+          <div class="room-join">
+            <input id="join-code" placeholder="XXXXXXXX" maxlength="8" style="text-transform:uppercase;letter-spacing:.15em">
+            <button onclick="joinRoom()">Join</button>
+          </div>
+        </div>
+        <p style="font-size:.78rem;color:var(--text3);font-family:var(--font-code)">Paste the 8-character room code shared by your teammate.</p>
+      </div>
+
+      <!-- Browse -->
+      <div id="pane-browse" style="display:none">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.6rem">
+          <span style="font-size:.78rem;color:var(--text3);font-family:var(--font-code)">Active rooms</span>
+          <button onclick="loadRooms()" style="background:none;border:none;color:var(--accent);font-size:.78rem;cursor:pointer;font-family:var(--font-ui);font-weight:600">↻ Refresh</button>
+        </div>
+        <div class="form-group" style="margin-bottom:.75rem">
+          <label>Your Name (to join)</label>
+          <input id="browse-name" placeholder="Enter your name">
+        </div>
+        <div class="rooms-list" id="rooms-list">
+          <div class="rooms-empty">No active rooms yet. Create one!</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── MAIN APP ──────────────────────────────────────────────────────────── -->
+<div id="app">
+  <!-- Topbar -->
+  <div class="topbar">
+    <div class="brand">Code<span>Sync</span></div>
+    <div class="room-info" onclick="openShareModal()" title="Click to share">
+      <div class="room-dot"></div>
+      <span class="room-id-text" id="topbar-room-id">—</span>
+      <span class="room-name-text" id="topbar-room-name">—</span>
+    </div>
+    <div class="topbar-mid">
+      <select class="lang-select" id="lang-select" onchange="changeLanguage(this.value)">
+        <option value="javascript">JavaScript</option>
+        <option value="typescript">TypeScript</option>
+        <option value="python">Python</option>
+        <option value="html">HTML</option>
+        <option value="css">CSS</option>
+        <option value="sql">SQL</option>
+        <option value="json">JSON</option>
+        <option value="markdown">Markdown</option>
+      </select>
+      <button class="tb-btn green" onclick="runCode()" title="Ctrl+Enter">▶ Run</button>
+      <button class="tb-btn" onclick="copyCode()">⎘ Copy Code</button>
+      <button class="tb-btn" onclick="downloadCode()">↓ Download</button>
+    </div>
+    <div class="topbar-right">
+      <div class="conn-badge"><div class="conn-dot" id="conn-dot"></div><span id="conn-text">Connecting</span></div>
+      <button class="tb-btn" onclick="toggleChat()" id="chat-btn">💬 Chat</button>
+      <button class="tb-btn red" onclick="leaveRoom()">✕ Leave</button>
+    </div>
+  </div>
+
+  <!-- Main -->
+  <div class="main-area">
+    <!-- Left Sidebar -->
+    <div class="sidebar-left" id="sidebar-left">
+      <div class="sidebar-section">
+        <div class="sidebar-label">Collaborators <span id="user-count">0</span></div>
+        <div class="user-list" id="user-list"></div>
+      </div>
+      <div class="sidebar-section">
+        <div class="sidebar-label">Stats</div>
+        <div class="stats-grid">
+          <div class="stat-card"><div class="stat-val" id="stat-lines">0</div><div class="stat-lbl">Lines</div></div>
+          <div class="stat-card"><div class="stat-val" id="stat-chars">0</div><div class="stat-lbl">Chars</div></div>
+          <div class="stat-card"><div class="stat-val" id="stat-words">0</div><div class="stat-lbl">Words</div></div>
+          <div class="stat-card"><div class="stat-val" id="stat-users">0</div><div class="stat-lbl">Online</div></div>
+        </div>
+      </div>
+      <div class="sidebar-section" style="flex:1;overflow-y:auto">
+        <div class="sidebar-label">Session</div>
+        <div class="file-tree">
+          <div class="file-item active"><span>📄</span> main file</div>
+        </div>
+        <div style="margin-top:1rem">
+          <div style="font-size:.7rem;color:var(--text3);letter-spacing:.08em;text-transform:uppercase;font-weight:700;margin-bottom:.5rem">Shortcuts</div>
+          <div style="display:flex;flex-direction:column;gap:3px">
+            <div style="display:flex;justify-content:space-between;font-size:.73rem;color:var(--text3)"><span>Run</span><span style="font-family:var(--font-code);color:var(--text2)">Ctrl+↵</span></div>
+            <div style="display:flex;justify-content:space-between;font-size:.73rem;color:var(--text3)"><span>Comment</span><span style="font-family:var(--font-code);color:var(--text2)">Ctrl+/</span></div>
+            <div style="display:flex;justify-content:space-between;font-size:.73rem;color:var(--text3)"><span>Save/Copy</span><span style="font-family:var(--font-code);color:var(--text2)">Ctrl+S</span></div>
+            <div style="display:flex;justify-content:space-between;font-size:.73rem;color:var(--text3)"><span>Chat</span><span style="font-family:var(--font-code);color:var(--text2)">Ctrl+K</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Editor -->
+    <div class="editor-area">
+      <div class="editor-tabs">
+        <div class="editor-tab active" id="main-tab">
+          <span class="tab-dot" id="tab-dot" style="background:var(--accent)"></span>
+          <span id="tab-name">main.js</span>
+        </div>
+      </div>
+      <div class="editor-wrap">
+        <textarea id="code-editor"></textarea>
+      </div>
+      <div class="editor-statusbar">
+        <div class="sb-item">Ln <span id="sb-line">1</span>, Col <span id="sb-col">1</span></div>
+        <div class="sb-item">Lang <span id="sb-lang">JavaScript</span></div>
+        <div class="sb-item" id="sb-typing" style="color:var(--accent3);display:none">✎ Someone is typing...</div>
+        <div style="flex:1"></div>
+        <div class="sb-item">UTF-8</div>
+        <div class="sb-item">LF</div>
+        <div class="sb-item" id="sb-saved" style="color:var(--green)">✓ Synced</div>
+      </div>
+    </div>
+
+    <!-- Right Chat Sidebar -->
+    <div class="sidebar-right" id="sidebar-right">
+      <div class="chat-header">
+        <div class="chat-title">💬 Room Chat</div>
+        <button class="chat-close" onclick="toggleChat()">✕</button>
+      </div>
+      <div class="chat-messages" id="chat-messages"></div>
+      <div class="chat-input-area">
+        <input class="chat-input" id="chat-input" placeholder="Message..." maxlength="500" onkeydown="if(event.key==='Enter')sendChat()">
+        <button class="chat-send" onclick="sendChat()">↑</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Output Modal -->
+<div class="modal-bg" id="output-modal">
+  <div class="modal" style="max-width:640px;width:90%">
+    <div class="modal-title">
+      <span>▶ Output</span>
+      <button class="modal-close" onclick="closeModal('output-modal')">✕</button>
+    </div>
+    <pre id="output-content" style="background:var(--bg-base);border:1px solid var(--border);border-radius:var(--radius);padding:1rem;font-family:var(--font-code);font-size:.85rem;color:var(--text);overflow:auto;max-height:400px;white-space:pre-wrap;line-height:1.6"></pre>
+  </div>
+</div>
+
+<!-- Share Modal -->
+<div class="modal-bg" id="share-modal">
+  <div class="modal">
+    <div class="modal-title">
+      <span>🔗 Share Room</span>
+      <button class="modal-close" onclick="closeModal('share-modal')">✕</button>
+    </div>
+    <p style="font-size:.82rem;color:var(--text2);margin-bottom:.75rem">Share this link with teammates to collaborate in real-time:</p>
+    <div class="share-box" id="share-url"></div>
+    <p style="font-size:.78rem;color:var(--text3);margin-bottom:.75rem;font-family:var(--font-code)">Room Code: <span id="share-code" style="color:var(--accent);font-weight:700"></span></p>
+    <button class="copy-btn" id="copy-link-btn" onclick="copyLink()">Copy Link</button>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast-container"></div>
+
+<script>
+// ── STATE ──────────────────────────────────────────────────────────────────
+let socket = null, editor = null;
+let mySid = null, myColor = '#60a5fa', myName = '';
+let currentRoom = null, currentLang = 'javascript';
+let remoteCursors = {}, remoteWidgets = {};
+let chatOpen = false, isReceiving = false;
+let typingTimer = null, typingVisible = false;
+
+const LANG_MODES = {
+  javascript:'javascript',typescript:'javascript',python:'python',
+  html:'htmlmixed',css:'css',sql:'sql',json:'javascript',markdown:'markdown'
+};
+const LANG_EXT = {
+  javascript:'js',typescript:'ts',python:'py',html:'html',
+  css:'css',sql:'sql',json:'json',markdown:'md'
+};
+const LANG_NAMES = {
+  javascript:'JavaScript',typescript:'TypeScript',python:'Python',
+  html:'HTML',css:'CSS',sql:'SQL',json:'JSON',markdown:'Markdown'
+};
+
+// ── LANDING ────────────────────────────────────────────────────────────────
+function switchTab(t){
+  ['create','join','browse'].forEach(x=>{
+    document.getElementById('tab-'+x).classList.toggle('active',x===t);
+    document.getElementById('pane-'+x).style.display=x===t?'flex':'none';
+  });
+  if(t==='browse') loadRooms();
+}
+document.getElementById('pane-join').style.display='none';
+document.getElementById('pane-browse').style.display='none';
+
+async function createRoom(){
+  const name=(document.getElementById('create-name').value||'').trim()||'Anonymous';
+  const rname=(document.getElementById('create-room-name').value||'').trim()||'Untitled Room';
+  const lang=document.getElementById('create-lang').value;
+  myName=name;
+  const r=await fetch('/api/create-room',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:rname,language:lang})});
+  const d=await r.json();
+  enterRoom(d.room_id,name);
+}
+function joinRoom(){
+  const name=(document.getElementById('join-name').value||'').trim()||'Anonymous';
+  const code=document.getElementById('join-code').value.trim().toUpperCase();
+  if(!code||code.length!==8){toast('Enter a valid 8-character room code','warn');return;}
+  myName=name;enterRoom(code,name);
+}
+async function loadRooms(){
+  const r=await fetch('/api/rooms');
+  const rooms=await r.json();
+  const el=document.getElementById('rooms-list');
+  if(!rooms.length){el.innerHTML='<div class="rooms-empty">No active rooms. Create one!</div>';return;}
+  el.innerHTML=rooms.map(r=>`
+    <div class="room-item" onclick="browseJoin('${r.id}')">
+      <div><div class="room-item-name">${esc(r.name)}</div>
+      <div class="room-item-meta">${r.id} · ${LANG_NAMES[r.language]||r.language}</div></div>
+      <span class="room-item-badge">${r.user_count} online</span>
+    </div>`).join('');
+}
+function browseJoin(rid){
+  const name=(document.getElementById('browse-name').value||'').trim()||'Anonymous';
+  myName=name;enterRoom(rid,name);
+}
+
+// ── ROOM ENTER ─────────────────────────────────────────────────────────────
+function enterRoom(roomId,name){
+  currentRoom=roomId;myName=name;
+  document.getElementById('landing').style.display='none';
+  document.getElementById('app').style.display='flex';
+  initEditor();
+  connectSocket(roomId,name);
+}
+
+// ── EDITOR ─────────────────────────────────────────────────────────────────
+function initEditor(){
+  if(editor) return;
+  editor=CodeMirror.fromTextArea(document.getElementById('code-editor'),{
+    theme:'dracula',lineNumbers:true,matchBrackets:true,autoCloseBrackets:true,
+    styleActiveLine:true,indentUnit:2,tabSize:2,indentWithTabs:false,
+    lineWrapping:false,mode:'javascript',
+    extraKeys:{
+      'Ctrl-Enter':()=>runCode(),
+      'Ctrl-S':()=>copyCode(),
+      'Ctrl-K':()=>toggleChat(),
+      'Ctrl-/':cm=>cm.execCommand('toggleComment'),
+    }
+  });
+  editor.on('change',onEditorChange);
+  editor.on('cursorActivity',onCursorActivity);
+}
+function setEditorMode(lang){
+  editor.setOption('mode',LANG_MODES[lang]||'javascript');
+  document.getElementById('tab-name').textContent='main.'+( LANG_EXT[lang]||'txt');
+  document.getElementById('sb-lang').textContent=LANG_NAMES[lang]||lang;
+  document.getElementById('tab-dot').style.background=
+    {javascript:'#fbbf24',typescript:'#60a5fa',python:'#34d399',html:'#fb923c',css:'#a78bfa',sql:'#38bdf8',json:'#f472b6',markdown:'#94a3b8'}[lang]||'var(--accent)';
+}
+function onEditorChange(cm,change){
+  if(isReceiving) return;
+  const code=cm.getValue();
+  updateStats(code);
+  document.getElementById('sb-saved').textContent='● Unsaved';
+  document.getElementById('sb-saved').style.color='var(--yellow)';
+  if(socket && socket.connected){
+    socket.emit('code_change',{code});
+    clearTimeout(window._saveTimer);
+    window._saveTimer=setTimeout(()=>{
+      document.getElementById('sb-saved').textContent='✓ Synced';
+      document.getElementById('sb-saved').style.color='var(--green)';
+    },800);
+  }
+}
+function onCursorActivity(cm){
+  const cur=cm.getCursor();
+  document.getElementById('sb-line').textContent=cur.line+1;
+  document.getElementById('sb-col').textContent=cur.ch+1;
+  if(socket && socket.connected){
+    const sel=cm.somethingSelected()?{anchor:cm.getCursor('anchor'),head:cm.getCursor('head')}:null;
+    socket.emit('cursor_move',{cursor:{line:cur.line,ch:cur.ch},selection:sel});
+  }
+}
+function updateStats(code){
+  const lines=code.split('\n').length;
+  const chars=code.length;
+  const words=code.trim()?code.trim().split(/\s+/).length:0;
+  document.getElementById('stat-lines').textContent=lines;
+  document.getElementById('stat-chars').textContent=chars>999?Math.round(chars/100)/10+'k':chars;
+  document.getElementById('stat-words').textContent=words;
+}
+
+// ── SOCKET ─────────────────────────────────────────────────────────────────
+function connectSocket(roomId,name){
+  socket=io();
+  socket.on('connect',()=>{
+    setConnStatus(true);
+    socket.emit('join',{room_id:roomId,name});
+  });
+  socket.on('disconnect',()=>setConnStatus(false));
+  socket.on('error',d=>{toast(d.msg||'Error','warn');goHome();});
+
+  socket.on('room_state',d=>{
+    mySid=d.my_sid;myColor=d.my_color;currentLang=d.language;
+    document.getElementById('topbar-room-id').textContent=currentRoom;
+    document.getElementById('topbar-room-name').textContent=d.name;
+    document.getElementById('lang-select').value=d.language;
+    setEditorMode(d.language);
+    isReceiving=true;editor.setValue(d.code);isReceiving=false;
+    updateStats(d.code);renderUsers(d.users);
+    addChatSys('Connected to room · '+currentRoom);
+    toast('Joined room successfully','success');
+  });
+
+  socket.on('code_update',d=>{
+    if(d.from===mySid) return;
+    const scroll=editor.getScrollInfo();
+    const cur=editor.getCursor();
+    isReceiving=true;editor.setValue(d.code);isReceiving=false;
+    editor.setCursor(cur);editor.scrollTo(scroll.left,scroll.top);
+    updateStats(d.code);
+    showTyping(d.from);
+  });
+
+  socket.on('cursor_update',d=>{updateRemoteCursor(d);});
+  socket.on('user_joined',d=>{renderUsers(d.users);addChatSys(`${d.name} joined`);toast(`${d.name} joined`,'info');});
+  socket.on('user_left',d=>{renderUsers(d.users);addChatSys(`${d.name} left`);removeRemoteCursor(d.sid);});
+  socket.on('language_update',d=>{
+    currentLang=d.language;
+    document.getElementById('lang-select').value=d.language;
+    setEditorMode(d.language);
+    addChatSys(`${d.from} changed language to ${LANG_NAMES[d.language]||d.language}`);
+    toast(`Language → ${LANG_NAMES[d.language]||d.language}`,'info');
+  });
+  socket.on('chat_message',d=>addChatMsg(d));
+  socket.on('run_notification',d=>addChatSys(`${d.from} ran the code`));
+}
+function setConnStatus(ok){
+  document.getElementById('conn-dot').className='conn-dot'+(ok?' connected':'');
+  document.getElementById('conn-text').textContent=ok?'Live':'Offline';
+}
+
+// ── REMOTE CURSORS ─────────────────────────────────────────────────────────
+function updateRemoteCursor(d){
+  if(d.sid===mySid) return;
+  if(remoteWidgets[d.sid]) try{remoteWidgets[d.sid].clear();}catch(e){}
+  const marker=document.createElement('span');
+  marker.className='remote-cursor';
+  marker.style.borderColor=d.color;
+  const label=document.createElement('span');
+  label.className='remote-cursor-label';
+  label.style.background=d.color;
+  label.textContent=d.name;
+  marker.appendChild(label);
+  try{
+    remoteWidgets[d.sid]=editor.setBookmark(d.cursor,{widget:marker,insertLeft:true});
+  }catch(e){}
+  remoteCursors[d.sid]=d;
+  if(d.selection){
+    try{editor.markText(d.selection.anchor,d.selection.head,{css:`background:${d.color}22`});}catch(e){}
+  }
+}
+function removeRemoteCursor(sid){
+  if(remoteWidgets[sid]) try{remoteWidgets[sid].clear();}catch(e){}
+  delete remoteWidgets[sid];delete remoteCursors[sid];
+}
+
+// ── USERS ──────────────────────────────────────────────────────────────────
+function renderUsers(users){
+  document.getElementById('user-count').textContent=users.length;
+  document.getElementById('stat-users').textContent=users.length;
+  document.getElementById('user-list').innerHTML=users.map(u=>`
+    <div class="user-item">
+      <div class="user-avatar" style="background:${u.color}">${u.name[0].toUpperCase()}</div>
+      <div><div class="user-name">${esc(u.name)}</div>${u.sid===mySid?'<div class="user-you">you</div>':''}</div>
+    </div>`).join('');
+}
+
+// ── CHAT ───────────────────────────────────────────────────────────────────
+function toggleChat(){
+  chatOpen=!chatOpen;
+  document.getElementById('sidebar-right').classList.toggle('open',chatOpen);
+  document.getElementById('chat-btn').style.color=chatOpen?'var(--accent)':'';
+  if(chatOpen) document.getElementById('chat-input').focus();
+}
+function sendChat(){
+  const inp=document.getElementById('chat-input');
+  const msg=inp.value.trim();
+  if(!msg||!socket) return;
+  socket.emit('chat_message',{msg});
+  inp.value='';
+}
+function addChatMsg(d){
+  const isSelf=d.from===myName;
+  const time=new Date(d.ts*1000).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+  const el=document.createElement('div');
+  el.className='chat-msg'+(isSelf?' self':'');
+  el.innerHTML=`<div class="chat-msg-header">
+    <span class="chat-msg-name" style="color:${d.color}">${esc(d.from)}</span>
+    <span class="chat-msg-time">${time}</span>
+  </div><div class="chat-msg-body">${esc(d.msg)}</div>`;
+  const msgs=document.getElementById('chat-messages');
+  msgs.appendChild(el);msgs.scrollTop=msgs.scrollHeight;
+  if(!chatOpen){document.getElementById('chat-btn').style.color='var(--accent3)';}
+}
+function addChatSys(msg){
+  const el=document.createElement('div');
+  el.className='chat-sys';el.textContent=msg;
+  const msgs=document.getElementById('chat-messages');
+  msgs.appendChild(el);msgs.scrollTop=msgs.scrollHeight;
+}
+
+// ── TYPING INDICATOR ───────────────────────────────────────────────────────
+function showTyping(fromSid){
+  const sb=document.getElementById('sb-typing');
+  sb.style.display='flex';
+  clearTimeout(typingTimer);
+  typingTimer=setTimeout(()=>{sb.style.display='none';},2000);
+}
+
+// ── ACTIONS ────────────────────────────────────────────────────────────────
+function changeLanguage(lang){
+  currentLang=lang;setEditorMode(lang);
+  if(socket) socket.emit('language_change',{language:lang});
+}
+function runCode(){
+  if(!editor) return;
+  const code=editor.getValue();
+  const lang=currentLang;
+  if(socket) socket.emit('request_run',{});
+  let output='';
+  if(lang==='javascript'||lang==='json'){
+    const logs=[];
+    const fakeConsole={log:(...a)=>logs.push(a.map(String).join(' ')),error:(...a)=>logs.push('ERROR: '+a.join(' ')),warn:(...a)=>logs.push('WARN: '+a.join(' '))};
+    try{
+      const fn=new Function('console',code);
+      fn(fakeConsole);
+      output=logs.length?logs.join('\n'):'(no output)';
+    }catch(e){output='❌ '+e.message;}
+  }else{
+    output=`▶ ${LANG_NAMES[lang]} code\n${'─'.repeat(40)}\n${code.split('\n').slice(0,8).join('\n')}\n${code.split('\n').length>8?`\n... (${code.split('\n').length} lines total)`:''}\n\n⚠ Server-side execution requires a ${LANG_NAMES[lang]} runtime.\nThis preview shows your code. Run it locally with:\n${{'python':'python main.py','typescript':'ts-node main.ts','html':'open in browser','sql':'run in DB client','markdown':'render with a MD viewer'}[lang]||'your runtime'}`;
+  }
+  document.getElementById('output-content').textContent=output;
+  document.getElementById('output-modal').classList.add('open');
+}
+function copyCode(){
+  if(!editor) return;
+  navigator.clipboard.writeText(editor.getValue()).then(()=>toast('Code copied!','success'));
+}
+function downloadCode(){
+  if(!editor) return;
+  const blob=new Blob([editor.getValue()],{type:'text/plain'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+  a.download=`main.${LANG_EXT[currentLang]||'txt'}`;a.click();
+  toast('Downloaded!','success');
+}
+function openShareModal(){
+  const url=`${location.origin}/room/${currentRoom}`;
+  document.getElementById('share-url').textContent=url;
+  document.getElementById('share-code').textContent=currentRoom;
+  document.getElementById('share-modal').classList.add('open');
+}
+function copyLink(){
+  const url=document.getElementById('share-url').textContent;
+  navigator.clipboard.writeText(url).then(()=>{
+    const btn=document.getElementById('copy-link-btn');
+    btn.textContent='✓ Copied!';btn.classList.add('copied');
+    setTimeout(()=>{btn.textContent='Copy Link';btn.classList.remove('copied');},2000);
+  });
+}
+function closeModal(id){document.getElementById(id).classList.remove('open');}
+document.querySelectorAll('.modal-bg').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('open');}));
+
+function leaveRoom(){
+  if(socket){socket.disconnect();socket=null;}
+  currentRoom=null;mySid=null;remoteCursors={};remoteWidgets={};chatOpen=false;
+  document.getElementById('app').style.display='none';
+  document.getElementById('landing').style.display='flex';
+  document.getElementById('chat-messages').innerHTML='';
+  document.getElementById('sidebar-right').classList.remove('open');
+  if(editor){editor.setValue('');setEditorMode('javascript');}
+}
+function goHome(){leaveRoom();}
+
+// ── TOAST ──────────────────────────────────────────────────────────────────
+function toast(msg,type='info'){
+  const el=document.createElement('div');
+  el.className=`toast ${type}`;el.textContent=msg;
+  document.getElementById('toast-container').appendChild(el);
+  setTimeout(()=>el.remove(),3000);
+}
+
+// ── UTILS ──────────────────────────────────────────────────────────────────
+function esc(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML;}
+
+// Check URL for room_id
+(function(){
+  const path=location.pathname;
+  const m=path.match(/\/room\/([A-Z0-9]{8})/i);
+  if(m){
+    document.getElementById('join-code').value=m[1].toUpperCase();
+    switchTab('join');
+    document.getElementById('join-name').focus();
+  }
+})();
+</script>
+</body>
+</html>
